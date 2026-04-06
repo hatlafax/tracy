@@ -786,6 +786,10 @@ namespace tracy
                         { CUPTI_RUNTIME_TRACE_CBID_cudaEventQuery_v3020,        NON_STREAM_FUNC() },
                         { CUPTI_RUNTIME_TRACE_CBID_cudaStreamWaitEvent_v3020,   NON_STREAM_FUNC() },
                         { CUPTI_RUNTIME_TRACE_CBID_cudaDeviceSynchronize_v3020, NON_STREAM_FUNC() },
+                        // Graph launch: tracked so we can correlate GPU activities back to
+                        // the cudaGraphLaunch call site via CUPTI_ACTIVITY_KIND_GRAPH_TRACE
+                        { CUPTI_RUNTIME_TRACE_CBID_cudaGraphLaunch_v10000,      GET_STREAM_FUNC(cudaGraphLaunch_v10000_params, stream) },
+                        { CUPTI_RUNTIME_TRACE_CBID_cudaGraphLaunch_ptsz_v10000, GET_STREAM_FUNC(cudaGraphLaunch_v10000_params, stream) },
                     };
                     #undef NON_STREAM_FUNC
                     #undef GET_STREAM_FUNC
