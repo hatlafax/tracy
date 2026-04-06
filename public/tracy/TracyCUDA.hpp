@@ -903,6 +903,27 @@ namespace tracy
             return true;
         }
 
+        // Like matchActivityToAPICall, but also handles graph-launched activities.
+        // All activities in one cuGraphLaunch share the launch's correlationId, so
+        // the first activity consumes the cudaCallSiteInfo entry and caches it by
+        // graphId; subsequent activities from the same launch find it via graphId.
+        // Returns false (and emits a Tracy error message) only if no match is found
+        // via either path.
+        static bool matchGraphActivityToAPICall(uint32_t correlationId, uint32_t graphId,
+                                                APICallInfo& apiCallInfo, const char* kind) {
+            if (!matchActivityToAPICall(correlationId, apiCallInfo)) {
+                if (graphId == 0 || !PersistentState::Get().cudaGraphCurrentLaunch.fetch(graphId, apiCallInfo)) {
+                    matchError(correlationId, kind);
+                    return false;
+                }
+            } else if (graphId != 0) {
+                auto& cache = PersistentState::Get().cudaGraphCurrentLaunch;
+                cache.erase(graphId);
+                cache.emplace(graphId, apiCallInfo);
+            }
+            return true;
+        }
+
         static void matchError(uint32_t correlationId, const char* kind) {
             char msg [128];
             snprintf(msg, sizeof(msg), "ERROR: device activity '%s' has no matching CUDA API call (id=%u).", kind, correlationId);
@@ -1005,20 +1026,8 @@ namespace tracy
                 ZoneNamedN(kernel, "tracy::CUDACtx::DoProcessDeviceEvent[kernel]", instrument);
                 CUpti_ActivityKernel9* kernel9 = (CUpti_ActivityKernel9*) record;
                 APICallInfo apiCall;
-                if (!matchActivityToAPICall(kernel9->correlationId, apiCall)) {
-                    // All kernels in one cuGraphLaunch share the launch's correlationId.
-                    // The first kernel consumes the cudaCallSiteInfo entry; subsequent
-                    // ones find the cached APICallInfo in cudaGraphCurrentLaunch[graphId].
-                    uint32_t graphId = kernel9->graphId;
-                    if (graphId == 0 || !PersistentState::Get().cudaGraphCurrentLaunch.fetch(graphId, apiCall)) {
-                        return matchError(kernel9->correlationId, "KERNEL");
-                    }
-                } else if (kernel9->graphId != 0) {
-                    // Cache the APICallInfo for the other kernels in this graph launch
-                    // that share the same correlationId (which was just erased above).
-                    auto& cache = PersistentState::Get().cudaGraphCurrentLaunch;
-                    cache.erase(kernel9->graphId);
-                    cache.emplace(kernel9->graphId, apiCall);
+                if (!matchGraphActivityToAPICall(kernel9->correlationId, kernel9->graphId, apiCall, "KERNEL")) {
+                    return;
                 }
                 apiCall.host->EmitGpuZone(apiCall.start, apiCall.end, kernel9->start, kernel9->end, getKernelSourceLocation(kernel9->name), kernel9->contextId, kernel9->streamId);
                 auto latency_ms = (kernel9->start - apiCall.cupti) / 1'000'000.0;
@@ -1031,15 +1040,8 @@ namespace tracy
                 ZoneNamedN(kernel, "tracy::CUDACtx::DoProcessDeviceEvent[memcpy]", instrument);
                 CUpti_ActivityMemcpy5* memcpy5 = (CUpti_ActivityMemcpy5*) record;
                 APICallInfo apiCall;
-                if (!matchActivityToAPICall(memcpy5->correlationId, apiCall)) {
-                    uint32_t graphId = memcpy5->graphId;
-                    if (graphId == 0 || !PersistentState::Get().cudaGraphCurrentLaunch.fetch(graphId, apiCall)) {
-                        return matchError(memcpy5->correlationId, "MEMCPY");
-                    }
-                } else if (memcpy5->graphId != 0) {
-                    auto& cache = PersistentState::Get().cudaGraphCurrentLaunch;
-                    cache.erase(memcpy5->graphId);
-                    cache.emplace(memcpy5->graphId, apiCall);
+                if (!matchGraphActivityToAPICall(memcpy5->correlationId, memcpy5->graphId, apiCall, "MEMCPY")) {
+                    return;
                 }
                 static constexpr tracy::SourceLocationData TracyCUPTISrcLocDeviceMemcpy { "CUDA::memcpy", TracyFunction, TracyFile, (uint32_t)TracyLine, tracy::Color::Blue };
                 apiCall.host->EmitGpuZone(apiCall.start, apiCall.end, memcpy5->start, memcpy5->end, &TracyCUPTISrcLocDeviceMemcpy, memcpy5->contextId, memcpy5->streamId);
@@ -1054,15 +1056,8 @@ namespace tracy
                 ZoneNamedN(kernel, "tracy::CUDACtx::DoProcessDeviceEvent[memset]", instrument);
                 CUpti_ActivityMemset4* memset4 = (CUpti_ActivityMemset4*) record;
                 APICallInfo apiCall;
-                if (!matchActivityToAPICall(memset4->correlationId, apiCall)) {
-                    uint32_t graphId = memset4->graphId;
-                    if (graphId == 0 || !PersistentState::Get().cudaGraphCurrentLaunch.fetch(graphId, apiCall)) {
-                        return matchError(memset4->correlationId, "MEMSET");
-                    }
-                } else if (memset4->graphId != 0) {
-                    auto& cache = PersistentState::Get().cudaGraphCurrentLaunch;
-                    cache.erase(memset4->graphId);
-                    cache.emplace(memset4->graphId, apiCall);
+                if (!matchGraphActivityToAPICall(memset4->correlationId, memset4->graphId, apiCall, "MEMSET")) {
+                    return;
                 }
                 static constexpr tracy::SourceLocationData TracyCUPTISrcLocDeviceMemset { "CUDA::memset", TracyFunction, TracyFile, (uint32_t)TracyLine, tracy::Color::Blue };
                 apiCall.host->EmitGpuZone(apiCall.start, apiCall.end, memset4->start, memset4->end, &TracyCUPTISrcLocDeviceMemset, memset4->contextId, memset4->streamId);
