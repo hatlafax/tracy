@@ -13,13 +13,15 @@ CXXFLAGS_DBG   := -g -O0 -DTRACY_ENABLE
 NVCCFLAGS_REL  := -arch=native -O2 -DTRACY_ENABLE
 NVCCFLAGS_DBG  := -arch=native -g -O0 -DTRACY_ENABLE
 
-.PHONY: all debug investigate clean
+.PHONY: all debug investigate investigate2 clean
 
 all: repro
 
 debug: repro_debug
 
 investigate: test_corr_reuse
+
+investigate2: test_graphid_recycle
 
 # Release build
 repro: repro.cu tracy_client.o
@@ -39,5 +41,9 @@ tracy_client_debug.o: $(TRACY_SRCS)
 test_corr_reuse: test_corr_reuse.cu
 	$(NVCC) $(NVCCFLAGS_REL) $(INCLUDES) -o $@ $< $(LIBS)
 
+# Investigation: does CUPTI recycle graphId values after cudaGraphExecDestroy?
+test_graphid_recycle: test_graphid_recycle.cu
+	$(NVCC) $(NVCCFLAGS_REL) $(INCLUDES) -o $@ $< $(LIBS)
+
 clean:
-	rm -f repro repro_debug test_corr_reuse tracy_client.o tracy_client_debug.o
+	rm -f repro repro_debug test_corr_reuse test_graphid_recycle tracy_client.o tracy_client_debug.o
