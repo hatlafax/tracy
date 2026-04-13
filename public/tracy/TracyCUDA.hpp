@@ -819,9 +819,10 @@ namespace tracy
                         { CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_ptsz_v7000,     GET_STREAM_FUNC(cudaLaunchKernel_ptsz_v7000_params, stream) },
                         { CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_v11060,      GET_STREAM_FUNC(cudaLaunchKernelExC_v11060_params, config->stream) },
                         { CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernelExC_ptsz_v11060, GET_STREAM_FUNC(cudaLaunchKernelExC_ptsz_v11060_params, config->stream) },
-                        // Runtime: Memory
-                        { CUPTI_RUNTIME_TRACE_CBID_cudaMalloc_v3020, NON_STREAM_FUNC() },
-                        { CUPTI_RUNTIME_TRACE_CBID_cudaFree_v3020,   NON_STREAM_FUNC() },
+                        // Runtime: Memory — NOT tracked here. The MEMORY2 handler
+                        // only needs address/size/timestamp from the activity record
+                        // and never calls EmitGpuZone, so there is no consumer for
+                        // the cudaCallSiteInfo entry. Tracking them would leak entries.
                         // Runtime: Memcpy
                         { CUPTI_RUNTIME_TRACE_CBID_cudaMemcpy_v3020,      NON_STREAM_FUNC() },
                         { CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyAsync_v3020, GET_STREAM_FUNC(cudaMemcpyAsync_v3020_params, stream) },
@@ -856,11 +857,7 @@ namespace tracy
                         { CUPTI_DRIVER_TRACE_CBID_cuLaunchKernel_ptsz,   GET_STREAM_FUNC(cuLaunchKernel_ptsz_params, hStream)} ,
                         { CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx,      GET_STREAM_FUNC(cuLaunchKernelEx_params, config->hStream) },
                         { CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx_ptsz, GET_STREAM_FUNC(cuLaunchKernelEx_params, config->hStream) },
-                        // Driver: Memory
-                        { CUPTI_DRIVER_TRACE_CBID_cuMemAlloc_v2,         NON_STREAM_FUNC() },
-                        { CUPTI_DRIVER_TRACE_CBID_cuMemAllocManaged,     NON_STREAM_FUNC() },
-                        { CUPTI_DRIVER_TRACE_CBID_cuMemAllocPitch_v2,    NON_STREAM_FUNC() },
-                        { CUPTI_DRIVER_TRACE_CBID_cuMemFree_v2,          NON_STREAM_FUNC() },
+                        // Driver: Memory — NOT tracked (see Runtime: Memory comment above).
                         // Driver: Memcpy - Synchronous
                         { CUPTI_DRIVER_TRACE_CBID_cuMemcpy,              NON_STREAM_FUNC() },
                         { CUPTI_DRIVER_TRACE_CBID_cuMemcpyHtoD_v2,       NON_STREAM_FUNC() },
